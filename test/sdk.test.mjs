@@ -16,14 +16,13 @@ import { exampleFor, fakeFetch, fromSpec } from "./helpers.mjs";
 
 const KEY = "sk_skryvo_test";
 const BASE = "https://api.skryvo.ai/api/v1/agent";
-const WEBHOOK_ROUTES = ["GET /webhooks", "POST /webhooks", "DELETE /webhooks/{id}", "POST /webhooks/{id}/test", "GET /webhooks/{id}/deliveries"];
 
 function client(handler, options = {}) {
   const fake = fakeFetch(handler);
   return { skryvo: new Skryvo({ apiKey: KEY, fetch: fake.fetch, ...options }), calls: fake.calls };
 }
 
-test("every operation in the spec, and the webhook routes, has a method", async () => {
+test("every operation in the spec has a method", async () => {
   const { skryvo, calls } = client((call) => exampleFor(call.method, call.path) ?? { body: {} });
   const id = "x1";
   await skryvo.account.me();
@@ -68,10 +67,7 @@ test("every operation in the spec, and the webhook routes, has a method", async 
   await skryvo.webhooks.deliveries(id);
 
   const called = new Set(calls.map((c) => `${c.method} ${c.path.slice("/api/v1/agent".length).replace(/x1|pl_1/g, "{}")}`));
-  const wanted = [
-    ...OPERATIONS.map((op) => `${op.method} ${op.path.replace(/\{[^}]+\}/g, "{}")}`),
-    ...WEBHOOK_ROUTES.map((r) => r.replace(/\{[^}]+\}/g, "{}")),
-  ];
+  const wanted = OPERATIONS.map((op) => `${op.method} ${op.path.replace(/\{[^}]+\}/g, "{}")}`);
   for (const route of wanted) assert.ok(called.has(route), `no method calls ${route}`);
   assert.equal(called.size, new Set(wanted).size);
 });

@@ -1,7 +1,8 @@
 import { ConnectionError, SkryvoError, errorFromResponse } from "./errors.js";
 import type * as S from "./generated/schemas.js";
-import type * as T from "./types.js";
 import { VERSION } from "./version.js";
+
+export type ContentKind = "article" | "post" | "email" | "listing" | "ad";
 
 export const DEFAULT_BASE_URL = "https://api.skryvo.ai/api/v1/agent";
 
@@ -170,7 +171,7 @@ export class Account extends Group {
 
 export class Brands extends Group {
   async list() {
-    return (await this.read<S.BrandsResponse>("/brands")).brands ?? [];
+    return (await this.read<S.BrandsResponse>("/brands")).brands;
   }
   /** Reads a new brand from its website in the background; uses one voice training. */
   add(body: S.AddBrandRequest) {
@@ -186,11 +187,11 @@ export class Brands extends Group {
 
 export class Channels extends Group {
   async list() {
-    return (await this.read<S.ChannelsResponse>("/channels")).channels ?? [];
+    return (await this.read<S.ChannelsResponse>("/channels")).channels;
   }
   /** Every channel Skryvo offers, connected or not. */
   async platforms() {
-    return (await this.read<S.PlatformsResponse>("/platforms")).platforms ?? [];
+    return (await this.read<S.PlatformsResponse>("/platforms")).platforms;
   }
 }
 
@@ -201,10 +202,10 @@ export class Posts extends Group {
   }
   /** Schedules approved words to channels; call it only after the person's go-ahead. */
   async schedule(body: S.SchedulePostRequest) {
-    return (await this.send<S.SchedulePostResponse>("/posts", body)).posts ?? [];
+    return (await this.send<S.SchedulePostResponse>("/posts", body)).posts;
   }
   async list(query: { days?: number } = {}) {
-    return (await this.read<S.ScheduledPostsResponse>("/posts", query)).posts ?? [];
+    return (await this.read<S.ScheduledPostsResponse>("/posts", query)).posts;
   }
   change(postId: string, body: S.ChangePostRequest) {
     return this.client.request<S.ChangePostResponse>("PATCH", `/posts/${seg(postId)}`, { body });
@@ -309,14 +310,14 @@ export class Calendar extends Group {
 }
 
 export class Content extends Group {
-  async find(query: { kind?: T.ContentKind; limit?: number } = {}) {
-    return (await this.read<S.FindContentResponse>("/content", query)).items ?? [];
+  async find(query: { kind?: ContentKind; limit?: number } = {}) {
+    return (await this.read<S.FindContentResponse>("/content", query)).items;
   }
 }
 
 export class Videos extends Group {
   async list() {
-    return (await this.read<S.VideosResponse>("/videos")).videos ?? [];
+    return (await this.read<S.VideosResponse>("/videos")).videos;
   }
   /** Opens an upload for the person's own video; send the bytes to `upload_url`, then `finish`. */
   add(body: S.AddVideoRequest) {
@@ -328,8 +329,7 @@ export class Videos extends Group {
   /** add, send every chunk, finish: the video is then ready for `by_channel.<id>.video_id`. */
   async upload(data: Uint8Array, file: { name: string; mime?: string }): Promise<S.FinishVideoResponse> {
     const opened = await this.add({ name: file.name, size: data.byteLength, mime: file.mime ?? "" });
-    if (!opened.id || !opened.upload_url) throw new SkryvoError("Skryvo didn't open an upload. Try again.");
-    const chunk = opened.chunk_bytes || data.byteLength;
+    const chunk = opened.chunk_bytes;
     for (let start = 0; start < data.byteLength; start += chunk) {
       const end = Math.min(start + chunk, data.byteLength);
       const sent = await this.client.upload(opened.upload_url, data.slice(start, end), {
@@ -355,21 +355,21 @@ export class Results extends Group {
 
 export class Webhooks extends Group {
   async list() {
-    return (await this.read<{ webhooks: T.Webhook[] }>("/webhooks")).webhooks;
+    return (await this.read<S.Webhooks>("/webhooks")).webhooks;
   }
   /** The reply's `secret` is shown only now; keep it to verify each delivery. */
-  create(body: T.CreateWebhookRequest) {
-    return this.send<T.NewWebhook>("/webhooks", body);
+  create(body: S.NewWebhookRequest) {
+    return this.send<S.WebhookCreated>("/webhooks", body);
   }
   async delete(webhookId: string): Promise<void> {
     await this.client.request("DELETE", `/webhooks/${seg(webhookId)}`);
   }
   /** Sends a sample of each subscribed event, marked `"test": true`. */
   async test(webhookId: string) {
-    return (await this.send<{ deliveries: T.Delivery[] }>(`/webhooks/${seg(webhookId)}/test`)).deliveries;
+    return (await this.send<S.Deliveries>(`/webhooks/${seg(webhookId)}/test`)).deliveries;
   }
   /** The last 30 days' deliveries, newest first, up to 50. */
   async deliveries(webhookId: string) {
-    return (await this.read<{ deliveries: T.Delivery[] }>(`/webhooks/${seg(webhookId)}/deliveries`)).deliveries;
+    return (await this.read<S.Deliveries>(`/webhooks/${seg(webhookId)}/deliveries`)).deliveries;
   }
 }

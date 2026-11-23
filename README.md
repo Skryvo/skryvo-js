@@ -204,9 +204,9 @@ npm run typecheck
 
 `spec/openapi.json` is Skryvo's published description of the agent API (`https://api.skryvo.ai/openapi.json`,
 also written by Skryvo's `export_agent_openapi.py`). `npm run generate` rewrites `src/generated/` from it: one
-type per schema and per answer, and the table of operations. To take a new version of the API, replace
+type per schema and per answer, the table of operations and the webhook events. To take a new version of the API, replace
 `spec/openapi.json`, run `npm run generate` and `npm test`; the tests fail when the spec has a route no method
-calls. The webhook routes are typed in `src/types.ts` until the spec describes them.
+calls.
 
 Report bugs at https://github.com/Skryvo/skryvo-js/issues. Questions: support@skryvo.ai.
 

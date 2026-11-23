@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import type { Skryvo } from "../client.js";
 import type * as S from "../generated/schemas.js";
 import { verifyWebhook } from "../webhooks.js";
-import { WEBHOOK_EVENTS, type WebhookEventType } from "../types.js";
+import { WEBHOOK_EVENTS } from "../generated/operations.js";
 
 export class UsageError extends Error {}
 
@@ -670,7 +670,7 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           event: { type: "string", multiple: true, required: true, help: `<${WEBHOOK_EVENTS.join("|")}>` },
         },
         run: ({ client, values }) =>
-          client().webhooks.create({ url: str(values, "url")!, events: list(values, "event") as WebhookEventType[] }),
+          client().webhooks.create({ url: str(values, "url")!, events: list(values, "event") as S.NewWebhookRequest["events"] }),
       },
       delete: {
         summary: "Unsubscribe an endpoint",

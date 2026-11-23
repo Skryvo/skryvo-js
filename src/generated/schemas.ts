@@ -76,6 +76,12 @@ export interface LookChangeRequest {
   brand_id?: string | null;
 }
 
+export interface NewWebhookRequest {
+  /** An https:// address */
+  url: string;
+  events: Array<"post.published" | "post.failed" | "article.ready" | "article.failed" | "results.ready">;
+}
+
 export interface PictureRequest {
   text: string;
   platforms: string[];
@@ -263,239 +269,899 @@ export interface RateLimited {
   retry_after?: number;
 }
 
-export interface Post {
-  id?: string;
-  platform?: string;
-  channel_id?: string;
-  date?: string;
-  time?: string;
-  status?: string;
-  reason?: string | null;
-  awaiting_approval?: boolean;
-  reviewer_approval?: string | null;
-  auto_publish?: boolean;
-  text?: string;
-  topic?: string;
-  written?: boolean;
-  publish_error?: string | null;
-  posted_url?: string | null;
-  open_in_skryvo?: string;
+export interface Me {
+  email?: string | null;
+  plan: string;
 }
 
-export interface ChannelRules {
-  takes?: string;
-  words?: number;
-  title?: string | null;
-  media_required?: string | null;
-  pictures?: boolean;
-  video?: {
-    most_bytes?: number;
-    shortest_seconds?: number;
-    longest_seconds?: number;
-  };
-  thread_posts?: number;
-  poll?: boolean;
-  comments?: boolean;
-  link?: string;
-  options?: {
-    as_document?: string;
-  };
-  must_choose?: unknown[];
+export interface Brand {
+  id: string;
+  name?: string | null;
+  is_default: boolean;
+  posts_wait_for_approval?: boolean | null;
 }
 
-export interface Allowance {
-  generations?: number;
-  image_credits?: number;
-  resets_at?: string;
+export interface Brands {
+  brands: Brand[];
+}
+
+export interface BrandAdded {
+  id: string;
+  name: string;
+  status: "reading the site";
+}
+
+export interface ArticleRules {
+  takes: "articles";
+}
+
+export interface Channel {
+  id: string;
+  platform: string;
+  name?: string | null;
+  brand_ids: string[];
+  kind: "social" | "blog";
+  needs_reconnect: boolean;
+  can: PostRules | ArticleRules;
+}
+
+export interface OptionRule {
+  type: string;
+  choices?: unknown[] | null;
+  most?: number | null;
+}
+
+export interface PostRules {
+  takes: "posts";
+  words?: number | null;
+  /** The platform's title limit, where it has one */
+  title?: number | null;
+  media_required: "picture" | "clip" | "either" | "none";
+  pictures: boolean;
+  video?: VideoLimits | null;
+  thread_posts: number;
+  poll: boolean;
+  comments: boolean;
+  link: "destination" | "in the words";
+  options: Record<string, OptionRule>;
+  must_choose: string[];
+}
+
+export interface VideoLimits {
+  /** Null where the server sets its own */
+  most_bytes?: number | null;
+  shortest_seconds?: number | null;
+  longest_seconds?: number | null;
+}
+
+export interface Channels {
+  channels: Channel[];
 }
 
 export interface Look {
-  state?: string;
-  round?: number;
-  verb?: string;
-  direction?: string;
+  state?: string | null;
+  round: number;
+  verb: string;
+  direction: string;
   design?: string | null;
-  drawn?: Record<string, unknown>;
-  left?: number;
-  cost?: number;
-  kept?: boolean;
-  posts?: Array<{
-    kind?: string;
-    url?: string;
-    line?: string;
-    round?: number;
-    photo?: boolean;
-  }>;
+  drawn: Record<string, string>;
+  left: number;
+  cost: number;
+  kept: boolean;
+  posts: LookPost[];
+  photos?: number | null;
+}
+
+export interface LookPost {
+  kind?: string | null;
+  url?: string | null;
+  line?: string | null;
+  round: number;
+  photo: boolean;
+}
+
+export interface OwnPhoto {
+  id?: string | null;
+  label?: string | null;
+  url?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface Readiness {
+  logo: boolean;
+  colours: number;
+  fonts: boolean;
+  shots: Shot[];
+}
+
+export interface Shot {
+  key: string;
+  label: string;
+  tip: string;
+  have: boolean;
+}
+
+export interface Design {
+  brand_id: string;
+  name?: string | null;
+  logo_url?: string | null;
+  colours: Record<string, string>;
+  fonts: Record<string, string>;
+  look?: Look | null;
+  readiness: Readiness;
+  changes: string[];
+  own_photos?: OwnPhoto[] | null;
+  /** Why designs are type only, when no photos */
+  photos?: string | null;
+}
+
+export interface LookChanged {
+  look?: Look | null;
+  own_photos?: OwnPhoto[] | null;
+  photos?: string | null;
+}
+
+/** This month's balance; empty when it could not be read. */
+export interface Allowance {
+  generations?: number | "unlimited" | null;
+  image_credits?: number | "unlimited" | null;
+  resets_at?: string | null;
+}
+
+/** A choice the person made that the brand's saved defaults would not have. */
+export interface Difference {
+  field: string;
+  value?: unknown;
+  brand_default?: unknown;
+}
+
+export interface DraftPost {
+  platform: string;
+  text?: string | null;
+  hashtags?: string[] | null;
+  link?: string | null;
+  error?: string | null;
+  picture?: Picture | null;
+  picture_error?: string | null;
+}
+
+export interface Picture {
+  platform: string;
+  image_url: string;
+  width: number;
+  height: number;
+}
+
+export interface PostCost {
+  generations: number;
+  image_credits: number;
+}
+
+export interface PostsToConfirm {
+  status: "confirm";
+  topic: string;
+  brand_id?: string | null;
+  settings: Setting[];
+  cost: PostCost;
+  left: Allowance;
+  differs_from_brand: Difference[];
+  pictures_note?: string | null;
+}
+
+export interface PostsWritten {
+  status: "written";
+  topic: string;
+  brand_id?: string | null;
+  generation_id: string;
+  posts: DraftPost[];
+  settings: Setting[];
+  differs_from_brand: Difference[];
+  pictures_note?: string | null;
+}
+
+export interface Setting {
+  field: string;
+  /** Any JSON value: text, number, true or false, or a list */
+  value: unknown;
+  /** you, brand, brand profile, Skryvo default or no kept look */
+  from: string;
+}
+
+export interface Pictures {
+  brand_id: string;
+  headline: string;
+  pictures: Picture[];
+  credits_used: number;
+  /** Null when the plan has no limit */
+  credits_left?: number | null;
+}
+
+export interface BestTime {
+  platform: string;
+  time: string;
+  rate: number;
+  lift: number;
+  posts: number;
+  of: number;
+}
+
+export interface ChannelTotals {
+  posts: number;
+  measured: number;
+  unmeasured: number;
+  reach: number;
+  engagements: number;
+  clicks: number;
+  rate?: number | null;
+  platform: string;
+  access: string;
+}
+
+export interface Finding {
+  kind: string;
+  text: string;
+  lift?: number | null;
+  sample: string;
+  postIds: string[];
+  action: FindingAction;
+  weekday?: number | null;
+  band?: string | null;
+  platform?: string | null;
+}
+
+export interface FindingAction {
+  type: string;
+  hint?: string | null;
+}
+
+export interface TopPost {
+  id: string;
+  title: string;
+  platform?: string | null;
+  url?: string | null;
+  brandId: string;
+  generationId?: string | null;
+  publishedAt: string;
+  access: string;
+  reach?: number | null;
+  reachKind?: string | null;
+  engagements?: number | null;
+  clicks?: number | null;
+  rate?: number | null;
+  vsUsual?: number | null;
+  collectedAt?: string | null;
+  removed: boolean;
+  tagged: boolean;
+  visits?: Visits | null;
+}
+
+export interface Totals {
+  posts: number;
+  measured: number;
+  unmeasured: number;
+  reach: number;
+  engagements: number;
+  clicks: number;
+  rate?: number | null;
+}
+
+export interface Visits {
+  sessions: number;
+  engaged: number;
+  asOf?: string | null;
+}
+
+export interface Results {
+  days: number;
+  as_of?: string | null;
+  totals: Totals;
+  previous_totals: Totals;
+  channels: ChannelTotals[];
+  best_times: BestTime[];
+  findings: Finding[];
+  top_posts: TopPost[];
+}
+
+export interface Post {
+  id: string;
+  platform?: string | null;
+  channel_id?: string | null;
+  date?: string | null;
+  time?: string | null;
+  status?: "draft" | "scheduled" | "going_out" | "posted" | "didnt_post" | null;
+  reason?: string | null;
+  awaiting_approval: boolean;
+  reviewer_approval?: string | null;
+  auto_publish?: boolean | null;
+  text?: string | null;
+  topic?: string | null;
+  written: boolean;
+  publish_error?: string | null;
+  posted_url?: string | null;
+  open_in_skryvo?: string | null;
+}
+
+export interface Posts {
+  posts: Post[];
+}
+
+export interface Platform {
+  platform: string;
+  name: string;
+  kind: "social" | "blog";
+  can_connect: boolean;
+  can: PostRules | ArticleRules;
+}
+
+export interface Platforms {
+  platforms: Platform[];
+}
+
+/** Single item in generated plan. */
+export interface PlanItem {
+  day: string;
+  date: string;
+  time: string;
+  content_type: string;
+  platform?: string | null;
+  topic: string;
+  reasoning: string;
+  is_repurpose?: boolean;
+}
+
+/** Plan summary statistics. */
+export interface PlanSummary {
+  total_items: number;
+  blogs?: number;
+  social_posts?: number;
+  emails?: number;
+  repurposed?: number;
+}
+
+/** Generated content plan response. */
+export interface GeneratedPlanResponse {
+  period: string;
+  start_date: string;
+  end_date: string;
+  items: PlanItem[];
+  summary: PlanSummary;
+}
+
+export interface Added {
+  added: number;
+}
+
+export interface AdReady {
+  score: number;
+  ready: boolean;
+  checks?: ReadyCheck[];
+}
+
+export interface Asset {
+  text: string;
+  chars: number;
+  type?: string | null;
+  pin?: string | null;
+  hook_chars?: number | null;
+  hook_ok?: boolean | null;
+}
+
+/** Echoes the platform spec so the client never hard-codes a limit of its own. */
+export interface AssetLimit {
+  key: string;
+  label: string;
+  max_chars: number;
+  recommended_chars: number;
+  hook_chars?: number | null;
+  serves_count?: number;
+}
+
+export interface ClaimFlag {
+  asset_ref: string;
+  claim: string;
+  reason: string;
+  fix?: string | null;
+}
+
+export interface PlatformResult {
+  platform: string;
+  label: string;
+  variations?: Variation[];
+  limits?: AssetLimit[];
+  pin_advice?: string | null;
+  sitelink_ideas?: string[];
+}
+
+export interface ReadyCheck {
+  id: string;
+  status: "pass" | "warn" | "fail";
+  detail?: string | null;
+  fixable?: boolean;
+  violations?: string[];
+  flags?: ClaimFlag[];
+}
+
+export interface Variation {
+  angle: string;
+  angle_label: string;
+  angle_reason: string;
+  assets?: Record<string, Asset[]>;
+  cta?: string | null;
+  ad_ready?: AdReady | null;
+}
+
+export interface AdsWritten {
+  generation_id?: string | null;
+  platforms: Record<string, PlatformResult>;
+}
+
+export interface Found {
+  id?: string | null;
+  kind?: string | null;
+  title?: string | null;
+  brand_id?: string | null;
+  created_at?: string | null;
+}
+
+export interface FoundContent {
+  items: Found[];
+}
+
+export interface Video {
+  id: string;
+  name?: string | null;
+  bytes?: number | null;
+}
+
+export interface Videos {
+  videos: Video[];
+}
+
+export interface VideoUpload {
+  id: string;
+  upload_url: string;
+  chunk_bytes: number;
+}
+
+export interface VideoReady {
+  video_id: string;
+  status: "ready";
+  seconds?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface ArticleCost {
+  generations: number;
+  image_credits_up_to: number;
+}
+
+export interface Fact {
+  fact: string;
+  source?: string | null;
+  url?: string | null;
+}
+
+export interface Phrase {
+  phrase?: string | null;
+  monthly_searches?: number | null;
+  difficulty?: number | null;
+  intent?: string | null;
+}
+
+export interface PlanClash {
+  url?: string;
+  title: string;
+  severity: string;
+  message: string;
+}
+
+export interface SearchTarget {
+  phrase?: string | null;
+  monthly_searches?: number | null;
+  difficulty?: number | null;
+  intent?: string | null;
+  market?: string | null;
+  /** Why the phrase can or can't be won */
+  winnable?: string | null;
+  ideas: Phrase[];
+}
+
+export interface Section {
+  heading: string;
+  covers: string;
+}
+
+export interface Source {
+  title: string;
+  url: string;
+}
+
+export interface ArticlePlan {
+  status: "confirm";
+  plan_id: string;
+  brand_id?: string | null;
+  headline: string;
+  other_headlines: string[];
+  search_phrase?: string | null;
+  search?: SearchTarget | null;
+  keywords: string[];
+  angle: string;
+  outline: Section[];
+  questions: string[];
+  already_written: PlanClash[];
+  sources: Source[];
+  facts: Fact[];
+  other_search_phrases: string[];
+  settings: Setting[];
+  cost: ArticleCost;
+  left: Allowance;
+  differs_from_brand: Difference[];
+  plans_left: number;
+  expires_at: string;
+}
+
+export interface ArticleDone {
+  article_id: string;
+  status: "done";
+  generation_id: string;
+  title: string;
+  words: number;
+  score?: number | null;
+  markdown: string;
+  complete: boolean;
+  claims: Claims;
+  open_in_skryvo: string;
+}
+
+export interface ArticleFailed {
+  article_id: string;
+  status: "failed";
+  error: string;
+  charged: false;
+}
+
+export interface ArticleStarted {
+  article_id: string;
+  status: "writing";
+  minutes: number;
+  settings: ChosenSetting[];
+}
+
+export interface ArticleWriting {
+  article_id: string;
+  status: "writing";
+  stage: string;
+}
+
+export interface ChosenSetting {
+  field: string;
+  value?: unknown;
+}
+
+export interface Claim {
+  claim: string;
+  verdict: string;
+  why: string;
+  sources: string[];
+}
+
+export interface Claims {
+  checked: number;
+  verified: number;
+  by_verdict: Record<string, number>;
+  items: Claim[];
+}
+
+export interface BlogDraft {
+  status: "draft";
+  channel_id: string;
+  edit_url?: string | null;
+  preview_url?: string | null;
+  pictures_uploaded: number;
+  warnings: string[];
+}
+
+export interface ArticlePublished {
+  /** The scheduled post, or with as_draft the draft now on the blog */
+  post: Post | BlogDraft;
+}
+
+export interface ArticleSeo {
+  article_id: string;
+  score?: number | null;
+  keyword: string;
+  words?: number | null;
+  issues: string[];
+  improvements: string[];
+  next_improvement_free: boolean;
+  left: Allowance;
+}
+
+export interface ArticleImproved {
+  article_id: string;
+  goal: "seo" | "geo_citations" | "accuracy";
+  score_before?: number | null;
+  score_after?: number | null;
+  changes: string[];
+  remaining_issues: string[];
+  saved_as_version?: number | null;
+  charged: boolean;
+  open_in_skryvo: string;
+}
+
+export interface Place {
+  platform?: string | null;
+  url?: string | null;
+  published_at: string;
+  removed: boolean;
+  reach?: number | null;
+  reach_kind?: string | null;
+  engagements?: number | null;
+  clicks?: number | null;
+  search?: SearchNumbers | null;
+  read_at?: string | null;
+}
+
+export interface SearchNumbers {
+  clicks?: number | null;
+  impressions?: number | null;
+  ctr?: number | null;
+  position?: number | null;
+}
+
+export interface ArticleResults {
+  article_id: string;
+  title: string;
+  places: Place[];
+  open_in_skryvo: string;
+}
+
+export interface Receipt {
+  headings: number;
+  pictures: number;
+  tables: number;
+  links: number;
+  words: number;
+}
+
+export interface ArticleImported {
+  article_id: string;
+  status: "done";
+  title: string;
+  receipt: Receipt;
+  left_out: Record<string, number>;
+}
+
+export interface RepurposedPost {
+  platform: string;
+  text: string;
+  generation_id?: string | null;
+  error?: string | null;
+}
+
+export interface Repurposed {
+  article_id: string;
+  posts: RepurposedPost[];
+  left: Allowance;
+}
+
+export interface EmailToConfirm {
+  status: "confirm";
+  about: string;
+  brand_id?: string | null;
+  settings: Setting[];
+  cost: OneGeneration;
+  left: Allowance;
+}
+
+export interface EmailWritten {
+  status: "written";
+  brand_id?: string | null;
+  generation_id: string;
+  subject_lines: string[];
+  preheader?: string | null;
+  body?: string | null;
+  call_to_action?: string | null;
+  settings: Setting[];
+}
+
+export interface OneGeneration {
+  generations: number;
+}
+
+export interface ListingToConfirm {
+  status: "confirm";
+  product: string;
+  brand_id?: string | null;
+  settings: Setting[];
+  cost: OneGeneration;
+  left: Allowance;
+}
+
+export interface ListingWritten {
+  status: "written";
+  brand_id?: string | null;
+  generation_id: string;
+  title?: string | null;
+  /** The marketplace's own fields */
+  listing: Record<string, unknown>;
+  settings: Setting[];
+}
+
+export interface EnoughFor {
+  articles?: number | "unlimited" | null;
+  post_batches?: number | "unlimited" | null;
+  post_pictures?: number | "unlimited" | null;
+}
+
+export interface Balance {
+  plan: string;
+  access: string;
+  trial_ends_at?: string | null;
+  left: Allowance;
+  article_plans_left?: number | "unlimited" | null;
+  enough_for: EnoughFor;
+}
+
+export interface DefaultsSaved {
+  brand_id: string;
+  kind: "post" | "article";
+  saved: Record<string, unknown>;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  status: "active" | "paused";
+  paused_reason?: string | null;
+  created_at?: string | null;
+  last_delivery_at?: string | null;
+  failures: number;
+}
+
+export interface Webhooks {
+  webhooks: Webhook[];
+}
+
+export interface WebhookCreated {
+  id: string;
+  url: string;
+  events: string[];
+  status: "active" | "paused";
+  paused_reason?: string | null;
+  created_at?: string | null;
+  last_delivery_at?: string | null;
+  failures: number;
+  /** Shown this once; signs every delivery */
+  secret: string;
+}
+
+export interface Delivery {
+  id: string;
+  event_id: string;
+  type: string;
+  test: boolean;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  response_status?: number | null;
+  error?: string | null;
+  created_at?: string | null;
+  delivered_at?: string | null;
+  next_attempt_at?: string | null;
+}
+
+export interface Deliveries {
+  deliveries: Delivery[];
+}
+
+export interface PostPublishedEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "post.published";
+  data: Post;
+}
+
+export interface PostFailedEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "post.failed";
+  data: Post;
+}
+
+export interface ArticleReadyData {
+  article_id: string;
+  generation_id: string;
+  title: string;
+  words: number;
+  score?: number | null;
+  open_in_skryvo: string;
+}
+
+export interface ArticleReadyEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "article.ready";
+  data: ArticleReadyData;
+}
+
+export interface ArticleFailedData {
+  article_id: string;
+  error: string;
+  charged: false;
+}
+
+export interface ArticleFailedEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "article.failed";
+  data: ArticleFailedData;
+}
+
+export interface ResultsData {
+  post_id?: string | null;
+  publication_id: string;
+  platform?: string | null;
+  url?: string | null;
+  milestone: "1h" | "24h" | "7d" | "30d" | "60d" | "90d";
+  reach?: number | null;
+  reach_kind?: string | null;
+  engagements?: number | null;
+  clicks?: number | null;
+  collected_at?: string | null;
+}
+
+export interface ResultsReadyEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "results.ready";
+  data: ResultsData;
 }
 
 /** Who this key belongs to */
-export interface MeResponse {
-  email?: string;
-  plan?: string;
-}
+export type MeResponse = Me;
 
 /** List brands */
-export interface BrandsResponse {
-  brands?: Array<{
-    id?: string;
-    name?: string;
-    is_default?: boolean;
-  }>;
-}
+export type BrandsResponse = Brands;
 
 /** Add a brand from its website */
-export interface AddBrandResponse {
-  id?: string;
-  name?: string;
-  status?: string;
-}
+export type AddBrandResponse = BrandAdded;
 
 /** List connected channels */
-export interface ChannelsResponse {
-  channels?: Array<{
-    id?: string;
-    platform?: string;
-    name?: string;
-    brand_ids?: string[];
-    kind?: string;
-    needs_reconnect?: boolean;
-    can?: ChannelRules;
-  }>;
-}
+export type ChannelsResponse = Channels;
 
 /** Read a brand's design */
-export interface DesignResponse {
-  brand_id?: string;
-  name?: string;
-  logo_url?: string;
-  colours?: {
-    primary?: string;
-    accent?: string;
-    surface?: string;
-  };
-  fonts?: {
-    heading?: string;
-    body?: string;
-  };
-  look?: Look;
-  readiness?: {
-    logo?: boolean;
-    colours?: number;
-    fonts?: boolean;
-    shots?: Array<{
-      key?: string;
-      label?: string;
-      tip?: string;
-      have?: boolean;
-    }>;
-  };
-  changes?: string[];
-}
+export type DesignResponse = Design;
 
 /** Design or keep a brand's look */
-export interface ChangeLookResponse {
-  look?: Look;
-}
+export type ChangeLookResponse = LookChanged;
 
 /** Write posts */
-export interface WritePostResponse {
-  status?: string;
-  topic?: string;
-  brand_id?: string;
-  generation_id?: string;
-  posts?: Array<{
-    platform?: string;
-    text?: string;
-    hashtags?: string[];
-  }>;
-  settings?: Array<{
-    field?: string;
-    value?: string[];
-    from?: string;
-  }>;
-  differs_from_brand?: {
-    tone?: string;
-  };
-}
+export type WritePostResponse = PostsToConfirm | PostsWritten;
 
 /** Design a picture for a post */
-export interface DesignPictureResponse {
-  brand_id?: string;
-  headline?: string;
-  pictures?: Array<{
-    platform?: string;
-    image_url?: string;
-    width?: number;
-    height?: number;
-  }>;
-  credits_used?: number;
-  credits_left?: number;
-}
+export type DesignPictureResponse = Pictures;
 
 /** How published posts did */
-export interface ResultsResponse {
-  days?: number;
-  as_of?: string;
-  totals?: {
-    posts?: number;
-    measured?: number;
-    unmeasured?: number;
-    reach?: number;
-    engagements?: number;
-    clicks?: number;
-    rate?: number;
-  };
-  previous_totals?: {
-    posts?: number;
-    measured?: number;
-    unmeasured?: number;
-    reach?: number;
-    engagements?: number;
-    clicks?: number;
-    rate?: number;
-  };
-  channels?: Array<{
-    platform?: string;
-    access?: string;
-    posts?: number;
-    measured?: number;
-    unmeasured?: number;
-    reach?: number;
-    engagements?: number;
-    clicks?: number;
-    rate?: number;
-  }>;
-  best_times?: Array<{
-    platform?: string;
-    time?: string;
-    rate?: number;
-    lift?: number;
-    posts?: number;
-    of?: number;
-  }>;
-  findings?: Array<{
-    kind?: string;
-    text?: string;
-    lift?: number;
-    sample?: string;
-    postIds?: string[];
-    action?: {
-      type?: string;
-      hint?: string;
-    };
-  }>;
-  top_posts?: unknown[];
-}
+export type ResultsResponse = Results;
 
 /** Schedule a post */
-export interface SchedulePostResponse {
-  posts?: Post[];
-}
+export type SchedulePostResponse = Posts;
 
 /** List scheduled posts */
-export interface ScheduledPostsResponse {
-  posts?: Post[];
-}
+export type ScheduledPostsResponse = Posts;
 
 /** Move a post or change its words */
 export type ChangePostResponse = Post;
@@ -504,331 +1170,79 @@ export type ChangePostResponse = Post;
 export type ReviewPostResponse = Post;
 
 /** List every channel Skryvo offers */
-export interface PlatformsResponse {
-  platforms?: Array<{
-    platform?: string;
-    name?: string;
-    kind?: string;
-    can_connect?: boolean;
-    can?: ChannelRules;
-  }>;
-}
+export type PlatformsResponse = Platforms;
 
 /** Plan a week or a month of posts */
-export interface PlanCalendarResponse {
-  period?: string;
-  start_date?: string;
-  end_date?: string;
-  items?: Array<{
-    day?: string;
-    date?: string;
-    time?: string;
-    content_type?: string;
-    platform?: string;
-    topic?: string;
-    reasoning?: string;
-    is_repurpose?: boolean;
-  }>;
-  summary?: {
-    total_items?: number;
-    blogs?: number;
-    social_posts?: number;
-    emails?: number;
-    repurposed?: number;
-  };
-}
+export type PlanCalendarResponse = GeneratedPlanResponse;
 
 /** Add plan rows to the calendar */
-export interface AcceptPlanResponse {
-  added?: number;
-}
+export type AcceptPlanResponse = Added;
 
 /** Write ad copy */
-export interface WriteAdResponse {
-  generation_id?: string;
-  platforms?: {
-    google_ads?: {
-      platform?: string;
-      label?: string;
-      variations?: Array<{
-        angle?: string;
-        angle_label?: string;
-        angle_reason?: string;
-        assets?: {
-          headlines?: Array<{
-            text?: string;
-            chars?: number;
-          }>;
-        };
-        cta?: string;
-      }>;
-      limits?: Array<{
-        key?: string;
-        label?: string;
-        max_chars?: number;
-        recommended_chars?: number;
-        serves_count?: number;
-      }>;
-    };
-  };
-}
+export type WriteAdResponse = AdsWritten;
 
 /** Find earlier work */
-export interface FindContentResponse {
-  items?: Array<{
-    id?: string;
-    kind?: string;
-    title?: string;
-    brand_id?: string;
-    created_at?: string;
-  }>;
-}
+export type FindContentResponse = FoundContent;
 
 /** List ready videos */
-export interface VideosResponse {
-  videos?: Array<{
-    id?: string;
-    name?: string;
-    bytes?: number;
-  }>;
-}
+export type VideosResponse = Videos;
 
 /** Open a video upload */
-export interface AddVideoResponse {
-  id?: string;
-  upload_url?: string;
-  chunk_bytes?: number;
-}
+export type AddVideoResponse = VideoUpload;
 
 /** Finish a video upload */
-export interface FinishVideoResponse {
-  video_id?: string;
-  status?: string;
-  seconds?: number;
-  width?: number;
-  height?: number;
-}
+export type FinishVideoResponse = VideoReady;
 
 /** Plan an article */
-export interface PlanArticleResponse {
-  status?: string;
-  plan_id?: string;
-  brand_id?: string;
-  headline?: string;
-  other_headlines?: string[];
-  search_phrase?: string;
-  search?: {
-    phrase?: string;
-    monthly_searches?: number;
-    difficulty?: number;
-    intent?: string;
-    market?: string;
-    winnable?: boolean;
-    ideas?: unknown[];
-  };
-  keywords?: string[];
-  angle?: string;
-  outline?: Array<{
-    heading?: string;
-    covers?: string;
-  }>;
-  questions?: string[];
-  already_written?: unknown[];
-  sources?: Array<{
-    title?: string;
-    url?: string;
-  }>;
-  facts?: Array<{
-    fact?: string;
-    source?: string;
-    url?: string;
-  }>;
-  other_search_phrases?: string[];
-  settings?: Array<{
-    field?: string;
-    value?: number;
-    from?: string;
-  }>;
-  cost?: {
-    generations?: number;
-    image_credits_up_to?: number;
-  };
-  left?: Allowance;
-  differs_from_brand?: Record<string, unknown>;
-  plans_left?: number;
-  expires_at?: string;
-}
+export type PlanArticleResponse = ArticlePlan;
 
 /** Write a planned article */
-export interface WriteArticleResponse {
-  article_id?: string;
-  status?: string;
-  minutes?: number;
-  settings?: Array<{
-    field?: string;
-    value?: number;
-  }>;
-}
+export type WriteArticleResponse = ArticleStarted | ArticleWriting | ArticleFailed | ArticleDone;
 
 /** Read an article's progress */
-export interface ArticleStatusResponse {
-  article_id?: string;
-  status?: string;
-  generation_id?: string;
-  title?: string;
-  words?: number;
-  score?: number;
-  markdown?: string;
-  complete?: boolean;
-  claims?: {
-    checked?: number;
-    verified?: number;
-    by_verdict?: {
-      verified?: number;
-    };
-    items?: Array<{
-      claim?: string;
-      verdict?: string;
-      why?: string;
-      sources?: string[];
-    }>;
-  };
-  open_in_skryvo?: string;
-}
+export type ArticleStatusResponse = ArticleWriting | ArticleFailed | ArticleDone;
 
 /** Publish an article to a blog */
-export interface PublishArticleResponse {
-  post?: Post;
-}
+export type PublishArticleResponse = ArticlePublished;
 
 /** Check an article's SEO */
-export interface ArticleSeoResponse {
-  article_id?: string;
-  score?: number;
-  keyword?: string;
-  issues?: string[];
-  improvements?: string[];
-  next_improvement_free?: boolean;
-  left?: Allowance;
-}
+export type ArticleSeoResponse = ArticleSeo;
 
 /** Improve an article */
-export interface ImproveArticleResponse {
-  article_id?: string;
-  goal?: string;
-  score_before?: number;
-  score_after?: number;
-  changes?: string[];
-  remaining_issues?: unknown[];
-  saved_as_version?: number;
-  charged?: boolean;
-  open_in_skryvo?: string;
-}
+export type ImproveArticleResponse = ArticleImproved;
 
 /** How an article is doing */
-export interface ArticleResultsResponse {
-  article_id?: string;
-  title?: string;
-  places?: Array<{
-    platform?: string;
-    url?: string;
-    published_at?: string;
-    removed?: boolean;
-    reach?: number;
-    reach_kind?: string;
-    engagements?: number;
-    clicks?: number;
-    search?: {
-      clicks?: number;
-      impressions?: number;
-      ctr?: number;
-      position?: number;
-    };
-    read_at?: string;
-  }>;
-  open_in_skryvo?: string;
-}
+export type ArticleResultsResponse = ArticleResults;
 
 /** Bring in the person's own article */
-export interface ImportArticleResponse {
-  article_id?: string;
-  status?: string;
-  title?: string;
-  receipt?: {
-    headings?: number;
-    pictures?: number;
-    tables?: number;
-    links?: number;
-    words?: number;
-  };
-  left_out?: Record<string, unknown>;
-}
+export type ImportArticleResponse = ArticleImported;
 
 /** Turn an article into posts */
-export interface RepurposeArticleResponse {
-  article_id?: string;
-  posts?: Array<{
-    platform?: string;
-    text?: string;
-    generation_id?: string;
-    error?: string | null;
-  }>;
-  left?: Allowance;
-}
+export type RepurposeArticleResponse = Repurposed;
 
 /** Write an email */
-export interface WriteEmailResponse {
-  status?: string;
-  brand_id?: string;
-  generation_id?: string;
-  subject_lines?: string[];
-  preheader?: string;
-  body?: string;
-  call_to_action?: string;
-  settings?: Array<{
-    field?: string;
-    value?: string;
-    from?: string;
-  }>;
-}
+export type WriteEmailResponse = EmailToConfirm | EmailWritten;
 
 /** Write a product listing */
-export interface WriteListingResponse {
-  status?: string;
-  brand_id?: string;
-  generation_id?: string;
-  title?: string;
-  listing?: {
-    title?: string;
-    description?: string;
-    bullet_points?: string[];
-  };
-  settings?: Array<{
-    field?: string;
-    value?: string;
-    from?: string;
-  }>;
-}
+export type WriteListingResponse = ListingToConfirm | ListingWritten;
 
 /** What this month still allows */
-export interface BalanceResponse {
-  plan?: string;
-  access?: string;
-  trial_ends_at?: string | null;
-  left?: Allowance;
-  article_plans_left?: number;
-  enough_for?: {
-    articles?: number;
-    post_batches?: number;
-    post_pictures?: number;
-  };
-}
+export type BalanceResponse = Balance;
 
 /** Keep choices as the brand's defaults */
-export interface SaveDefaultsResponse {
-  brand_id?: string;
-  kind?: string;
-  saved?: {
-    tone?: string;
-  };
-}
+export type SaveDefaultsResponse = DefaultsSaved;
+
+/** List webhooks */
+export type ListWebhooksResponse = Webhooks;
+
+/** Add a webhook */
+export type CreateWebhookResponse = WebhookCreated;
+
+/** Send test events */
+export type TestWebhookResponse = Deliveries;
+
+/** List recent deliveries */
+export type WebhookDeliveriesResponse = Deliveries;
+
+/** One webhook delivery's body; `type` tells which. */
+export type WebhookEvent = PostPublishedEvent | PostFailedEvent | ArticleReadyEvent | ArticleFailedEvent | ResultsReadyEvent;

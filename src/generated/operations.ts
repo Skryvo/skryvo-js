@@ -110,6 +110,24 @@ export const OPERATIONS = [
     "response": "ChannelsResponse"
   },
   {
+    "id": "create_webhook",
+    "method": "POST",
+    "path": "/webhooks",
+    "summary": "Add a webhook",
+    "body": "NewWebhookRequest",
+    "query": [],
+    "response": "CreateWebhookResponse"
+  },
+  {
+    "id": "delete_webhook",
+    "method": "DELETE",
+    "path": "/webhooks/{webhook_id}",
+    "summary": "Delete a webhook",
+    "body": null,
+    "query": [],
+    "response": null
+  },
+  {
     "id": "design",
     "method": "GET",
     "path": "/design",
@@ -167,6 +185,15 @@ export const OPERATIONS = [
     "body": "ImproveArticleRequest",
     "query": [],
     "response": "ImproveArticleResponse"
+  },
+  {
+    "id": "list_webhooks",
+    "method": "GET",
+    "path": "/webhooks",
+    "summary": "List webhooks",
+    "body": null,
+    "query": [],
+    "response": "ListWebhooksResponse"
   },
   {
     "id": "me",
@@ -273,6 +300,15 @@ export const OPERATIONS = [
     "response": "ScheduledPostsResponse"
   },
   {
+    "id": "test_webhook",
+    "method": "POST",
+    "path": "/webhooks/{webhook_id}/test",
+    "summary": "Send test events",
+    "body": null,
+    "query": [],
+    "response": "TestWebhookResponse"
+  },
+  {
     "id": "videos",
     "method": "GET",
     "path": "/videos",
@@ -280,6 +316,15 @@ export const OPERATIONS = [
     "body": null,
     "query": [],
     "response": "VideosResponse"
+  },
+  {
+    "id": "webhook_deliveries",
+    "method": "GET",
+    "path": "/webhooks/{webhook_id}/deliveries",
+    "summary": "List recent deliveries",
+    "body": null,
+    "query": [],
+    "response": "WebhookDeliveriesResponse"
   },
   {
     "id": "write_ad",
@@ -327,3 +372,5 @@ export const OPERATIONS = [
     "response": "WritePostResponse"
   }
 ] as const;
+
+export const WEBHOOK_EVENTS = ["post.published","post.failed","article.ready","article.failed","results.ready"] as const;

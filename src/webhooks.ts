@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { WebhookVerificationError } from "./errors.js";
-import type { WebhookEvent } from "./types.js";
+import type { WebhookEvent } from "./generated/schemas.js";
 
 export interface VerifyOptions {
   /** Oldest signature accepted, in seconds; guards against a replayed delivery. */
