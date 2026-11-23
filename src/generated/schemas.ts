@@ -89,6 +89,8 @@ export interface PictureRequest {
   direction?: string | null;
   headline?: string | null;
   photo_id?: string | null;
+  /** An https address on the public internet: the call answers 202 with a job at once, and its answer is posted there, signed, when it is ready */
+  callback_url?: string | null;
 }
 
 export interface PlanArticleRequest {
@@ -106,6 +108,8 @@ export interface PlanArticleRequest {
   only_you?: string | null;
   notes?: string | null;
   sources?: string[] | null;
+  /** An https address on the public internet: the call answers 202 with a job at once, and its answer is posted there, signed, when it is ready */
+  callback_url?: string | null;
 }
 
 export interface PlanCalendarRequest {
@@ -237,6 +241,8 @@ export interface WritePostRequest {
   pictures?: boolean | null;
   /** The person approved the summary of what was assumed */
   confirmed?: boolean;
+  /** An https address on the public internet: the call answers 202 with a job at once, and its answer is posted there, signed, when it is ready */
+  callback_url?: string | null;
 }
 
 /** What YouTube asks of every upload, its tags, and the person's word on altered content. */
@@ -466,6 +472,14 @@ export interface Setting {
   value: unknown;
   /** you, brand, brand profile, Skryvo default or no kept look */
   from: string;
+}
+
+export interface JobAccepted {
+  job_id: string;
+  status: "running";
+  /** Shown this once; signs the callback */
+  secret: string;
+  poll_url: string;
 }
 
 export interface Pictures {
@@ -802,6 +816,23 @@ export interface ArticlePlan {
   expires_at: string;
 }
 
+export interface JobError {
+  /** The HTTP status the call would have answered */
+  status: number;
+  detail: string;
+}
+
+export interface Job {
+  job_id: string;
+  kind: "drafts" | "pictures" | "article_plan";
+  status: "running" | "done" | "failed";
+  /** The route's own answer, once done */
+  answer?: PostsToConfirm | PostsWritten | Pictures | ArticlePlan | null;
+  error?: JobError | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
 export interface ArticleDone {
   article_id: string;
   status: "done";
@@ -1130,6 +1161,24 @@ export interface ResultsReadyEvent {
   data: ResultsData;
 }
 
+export interface JobDoneEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "job.done";
+  data: Job;
+}
+
+export interface JobFailedEvent {
+  /** The event's id, the same on every endpoint and retry */
+  id: string;
+  created: string;
+  test: boolean;
+  type: "job.failed";
+  data: Job;
+}
+
 /** Who this key belongs to */
 export type MeResponse = Me;
 
@@ -1149,10 +1198,10 @@ export type DesignResponse = Design;
 export type ChangeLookResponse = LookChanged;
 
 /** Write posts */
-export type WritePostResponse = PostsToConfirm | PostsWritten;
+export type WritePostResponse = PostsToConfirm | PostsWritten | JobAccepted;
 
 /** Design a picture for a post */
-export type DesignPictureResponse = Pictures;
+export type DesignPictureResponse = Pictures | JobAccepted;
 
 /** How published posts did */
 export type ResultsResponse = Results;
@@ -1194,7 +1243,10 @@ export type AddVideoResponse = VideoUpload;
 export type FinishVideoResponse = VideoReady;
 
 /** Plan an article */
-export type PlanArticleResponse = ArticlePlan;
+export type PlanArticleResponse = ArticlePlan | JobAccepted;
+
+/** Read a job */
+export type JobStatusResponse = Job;
 
 /** Write a planned article */
 export type WriteArticleResponse = ArticleStarted | ArticleWriting | ArticleFailed | ArticleDone;
@@ -1245,4 +1297,4 @@ export type TestWebhookResponse = Deliveries;
 export type WebhookDeliveriesResponse = Deliveries;
 
 /** One webhook delivery's body; `type` tells which. */
-export type WebhookEvent = PostPublishedEvent | PostFailedEvent | ArticleReadyEvent | ArticleFailedEvent | ResultsReadyEvent;
+export type WebhookEvent = PostPublishedEvent | PostFailedEvent | ArticleReadyEvent | ArticleFailedEvent | ResultsReadyEvent | JobDoneEvent | JobFailedEvent;

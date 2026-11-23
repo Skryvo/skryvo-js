@@ -187,6 +187,15 @@ export const OPERATIONS = [
     "response": "ImproveArticleResponse"
   },
   {
+    "id": "job_status",
+    "method": "GET",
+    "path": "/jobs/{job_id}",
+    "summary": "Read a job",
+    "body": null,
+    "query": [],
+    "response": "JobStatusResponse"
+  },
+  {
     "id": "list_webhooks",
     "method": "GET",
     "path": "/webhooks",

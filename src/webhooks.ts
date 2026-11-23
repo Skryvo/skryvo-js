@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { WebhookVerificationError } from "./errors.js";
-import type { WebhookEvent } from "./generated/schemas.js";
+import type { JobDoneEvent, JobFailedEvent, WebhookEvent } from "./generated/schemas.js";
 
 export interface VerifyOptions {
   /** Oldest signature accepted, in seconds; guards against a replayed delivery. */
@@ -60,4 +60,21 @@ export function verifyWebhook(
   } catch (cause) {
     throw new WebhookVerificationError("The delivery's body is not JSON.", { cause });
   }
+}
+
+/**
+ * Checks a long call's callback against the job's secret (the `secret` in its 202 answer) and returns
+ * `job.done` or `job.failed` with the job.
+ */
+export function verifyJobCallback(
+  payload: string | Uint8Array,
+  signatureHeader: string | null | undefined,
+  secret: string,
+  options: VerifyOptions = {},
+): JobDoneEvent | JobFailedEvent {
+  const event = verifyWebhook(payload, signatureHeader, secret, options);
+  if (event.type !== "job.done" && event.type !== "job.failed") {
+    throw new WebhookVerificationError(`Expected a job callback, got ${event.type}.`);
+  }
+  return event;
 }

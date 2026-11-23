@@ -10,6 +10,7 @@ import {
   ServerError,
   WebhookVerificationError,
   sign,
+  verifyJobCallback,
   verifyWebhook,
 } from "../dist/index.js";
 import { exampleFor, fakeFetch, fromSpec } from "./helpers.mjs";
@@ -54,7 +55,9 @@ test("every operation in the spec has a method", async () => {
   await skryvo.listings.write({ product: "Board", features: ["Oak"] });
   await skryvo.ads.write({ product: "Board", platforms: ["google_ads"] });
   await skryvo.calendar.plan({ start_date: "2026-12-01" });
-  await skryvo.calendar.accept({ items: [{ date: "2026-12-01", time: "09:00", content_type: "social_media", topic: "t" }] });
+  await skryvo.calendar.accept({
+    items: [{ date: "2026-12-01", time: "09:00", content_type: "social_media", topic: "t" }],
+  });
   await skryvo.content.find({ kind: "article" });
   await skryvo.videos.list();
   await skryvo.videos.add({ name: "a.mp4", size: 10 });
@@ -65,8 +68,11 @@ test("every operation in the spec has a method", async () => {
   await skryvo.webhooks.delete(id);
   await skryvo.webhooks.test(id);
   await skryvo.webhooks.deliveries(id);
+  await skryvo.jobs.get(id);
 
-  const called = new Set(calls.map((c) => `${c.method} ${c.path.slice("/api/v1/agent".length).replace(/x1|pl_1/g, "{}")}`));
+  const called = new Set(
+    calls.map((c) => `${c.method} ${c.path.slice("/api/v1/agent".length).replace(/x1|pl_1/g, "{}")}`),
+  );
   const wanted = OPERATIONS.map((op) => `${op.method} ${op.path.replace(/\{[^}]+\}/g, "{}")}`);
   for (const route of wanted) assert.ok(called.has(route), `no method calls ${route}`);
   assert.equal(called.size, new Set(wanted).size);
@@ -99,7 +105,10 @@ test("reads SKRYVO_API_KEY and refuses to start without a key", () => {
 });
 
 test("a refusal carries Skryvo's own words", async () => {
-  const { skryvo } = client(() => ({ status: 422, body: { detail: "That time has passed. Pick a time in the future." } }));
+  const { skryvo } = client(() => ({
+    status: 422,
+    body: { detail: "That time has passed. Pick a time in the future." },
+  }));
   await assert.rejects(skryvo.posts.schedule({ text: "Hi", channel_ids: ["c1"] }), (error) => {
     assert.ok(error instanceof RefusedError);
     assert.equal(error.status, 422);
@@ -130,7 +139,11 @@ test("401 is an AuthenticationError", async () => {
 test("a rate limit is retried after Retry-After, on writes too", async () => {
   const { skryvo, calls } = client((_, n) =>
     n === 1
-      ? { status: 429, body: { error: "rate_limit_exceeded", message: "Slow down" }, headers: { "retry-after": "0.01" } }
+      ? {
+          status: 429,
+          body: { error: "rate_limit_exceeded", message: "Slow down" },
+          headers: { "retry-after": "0.01" },
+        }
       : { status: 200, body: { status: "written", posts: [] } },
   );
   const out = await skryvo.posts.write({ topic: "Hello there" });
@@ -139,14 +152,21 @@ test("a rate limit is retried after Retry-After, on writes too", async () => {
 });
 
 test("a rate limit past the retries is a RateLimitError with retryAfter", async () => {
-  const { skryvo } = client(() => ({ status: 429, body: { message: "Slow down" }, headers: { "retry-after": "0.01" } }), {
-    maxRetries: 1,
-  });
+  const { skryvo } = client(
+    () => ({ status: 429, body: { message: "Slow down" }, headers: { "retry-after": "0.01" } }),
+    {
+      maxRetries: 1,
+    },
+  );
   await assert.rejects(skryvo.account.me(), (error) => error instanceof RateLimitError && error.retryAfter === 0.01);
 });
 
 test("a 503 is retried on a read but never on a write that spends", async () => {
-  const read = client((_, n) => (n === 1 ? { status: 503, body: { message: "busy" }, headers: { "retry-after": "0.01" } } : fromSpec({ method: "GET", path: "/api/v1/agent/me" })));
+  const read = client((_, n) =>
+    n === 1
+      ? { status: 503, body: { message: "busy" }, headers: { "retry-after": "0.01" } }
+      : fromSpec({ method: "GET", path: "/api/v1/agent/me" }),
+  );
   assert.equal((await read.skryvo.account.me()).plan, "pro");
   const write = client(() => ({ status: 503, body: { message: "Our AI service is unavailable right now." } }));
   await assert.rejects(write.skryvo.posts.write({ topic: "Hello there" }), ServerError);
@@ -184,7 +204,8 @@ test("waitUntilDone polls until the article is done", async () => {
 test("videos.upload opens an upload, sends each chunk with its range, then finishes", async () => {
   const data = new Uint8Array(10).fill(7);
   const { skryvo, calls } = client((call) => {
-    if (call.path.endsWith("/videos")) return { status: 201, body: { id: "clip_1", upload_url: "https://upload.example/s", chunk_bytes: 4 } };
+    if (call.path.endsWith("/videos"))
+      return { status: 201, body: { id: "clip_1", upload_url: "https://upload.example/s", chunk_bytes: 4 } };
     if (call.url.host === "upload.example") {
       return { status: call.headers["content-range"].endsWith("9/10") ? 200 : 308 };
     }
@@ -202,7 +223,12 @@ test("videos.upload opens an upload, sends each chunk with its range, then finis
 });
 
 const SECRET = "whsec_test_secret";
-const BODY = JSON.stringify({ id: "evt_1", type: "post.published", created: "2026-11-23T10:00:00Z", data: { id: "p1" } });
+const BODY = JSON.stringify({
+  id: "evt_1",
+  type: "post.published",
+  created: "2026-11-23T10:00:00Z",
+  data: { id: "p1" },
+});
 
 test("verifyWebhook accepts a delivery signed with the endpoint's secret", () => {
   const t = 1_800_000_000;
@@ -233,4 +259,57 @@ test("the CommonJS build loads", async () => {
   const required = createRequire(import.meta.url)("../dist/index.cjs");
   assert.equal(typeof required.Skryvo, "function");
   assert.equal(typeof required.verifyWebhook, "function");
+});
+
+test("a long call with callback_url answers with a job, and jobs.wait backs off until it ends", async () => {
+  const accepted = { job_id: "job_1", status: "running", secret: "whsec_job", poll_url: `${BASE}/jobs/job_1` };
+  const pictures = exampleFor("POST", "/api/v1/agent/pictures").body;
+  const { skryvo, calls } = client((call, n) => {
+    if (call.method === "POST") return { status: 202, body: accepted };
+    return n < 4
+      ? { body: { job_id: "job_1", kind: "pictures", status: "running" } }
+      : { body: { job_id: "job_1", kind: "pictures", status: "done", answer: pictures } };
+  });
+  const started = await skryvo.pictures.design({
+    text: "Hello",
+    platforms: ["linkedin"],
+    callback_url: "https://example.com/done",
+  });
+  assert.equal(started.job_id, "job_1");
+  assert.equal(calls[0].body.callback_url, "https://example.com/done");
+  const waits = [];
+  const realTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms) => (waits.push(ms), realTimeout(fn, 0));
+  try {
+    const job = await skryvo.jobs.wait("job_1", { intervalMs: 1000, maxIntervalMs: 3000 });
+    assert.equal(job.status, "done");
+    assert.equal(job.answer.credits_used, pictures.credits_used);
+  } finally {
+    globalThis.setTimeout = realTimeout;
+  }
+  assert.deepEqual(waits, [1000, 2000]);
+  assert.equal(calls.at(-1).path, "/api/v1/agent/jobs/job_1");
+});
+
+test("verifyJobCallback accepts a signed job event and refuses any other event", () => {
+  const t = 1_800_000_000;
+  const done = JSON.stringify({
+    id: "evt_2",
+    type: "job.failed",
+    created: "2026-11-24T09:01:00Z",
+    test: false,
+    data: {
+      job_id: "job_1",
+      kind: "drafts",
+      status: "failed",
+      answer: null,
+      error: { status: 500, detail: "The work stopped before it finished, and nothing was charged." },
+    },
+  });
+  const event = verifyJobCallback(done, `t=${t},v1=${sign(done, "whsec_job", t)}`, "whsec_job", { now: t });
+  assert.equal(event.data.error.detail, "The work stopped before it finished, and nothing was charged.");
+  assert.throws(
+    () => verifyJobCallback(BODY, `t=${t},v1=${sign(BODY, SECRET, t)}`, SECRET, { now: t }),
+    /Expected a job callback, got post\.published/,
+  );
 });

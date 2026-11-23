@@ -29,6 +29,18 @@ before(async () => {
         res.end(body === undefined ? "" : JSON.stringify(body));
       };
       if (req.headers.authorization !== `Bearer ${KEY}`) return send(401, { detail: "Send a live Skryvo API key." });
+      if (url.pathname.endsWith("/pictures") && raw.includes("callback_url")) {
+        return send(202, { job_id: "job_9", status: "running", secret: "whsec_9", poll_url: `${base}/jobs/job_9` });
+      }
+      if (url.pathname.endsWith("/jobs/job_9")) {
+        return send(200, {
+          job_id: "job_9",
+          kind: "pictures",
+          status: "failed",
+          answer: null,
+          error: { status: 422, detail: "This brand has no kept look yet." },
+        });
+      }
       if (raw.includes('"text":"too late"')) {
         return send(422, { detail: "That time has passed. Pick a time in the future." });
       }
@@ -72,7 +84,10 @@ test("login reads the key from stdin, checks it and saves it readable only by it
 
 test("login refuses something that is not a key, and a key Skryvo rejects", async () => {
   assert.equal((await cli(["login"], { input: "hello\n" })).code, 2);
-  const rejected = await cli(["login"], { input: "sk_skryvo_wrong\n", env: { SKRYVO_CONFIG_DIR: join(configDir, "other") } });
+  const rejected = await cli(["login"], {
+    input: "sk_skryvo_wrong\n",
+    env: { SKRYVO_CONFIG_DIR: join(configDir, "other") },
+  });
   assert.equal(rejected.code, 1);
   assert.match(JSON.parse(rejected.err).error.message, /live Skryvo API key/);
 });
@@ -95,12 +110,20 @@ test("SKRYVO_API_KEY wins over the saved key", async () => {
 test("posts schedule sends the approved words, channels, time and per-channel pictures", async () => {
   seen.length = 0;
   const { code, out } = await cli([
-    "posts", "schedule",
-    "--text", "Doors open at nine.",
-    "--channel", "c1", "--channel", "c2",
-    "--at", "2026-12-01T09:00:00+01:00",
-    "--image-for", "c2=https://example.com/c2.jpg",
-    "--data", '{"by_channel":{"c1":{"thread":["Then coffee."]}}}',
+    "posts",
+    "schedule",
+    "--text",
+    "Doors open at nine.",
+    "--channel",
+    "c1",
+    "--channel",
+    "c2",
+    "--at",
+    "2026-12-01T09:00:00+01:00",
+    "--image-for",
+    "c2=https://example.com/c2.jpg",
+    "--data",
+    '{"by_channel":{"c1":{"thread":["Then coffee."]}}}',
   ]);
   assert.equal(code, 0, out);
   assert.deepEqual(seen[0].body, {
@@ -115,7 +138,20 @@ test("posts schedule sends the approved words, channels, time and per-channel pi
 
 test("posts write maps flags to the API's fields and --no-pictures to false", async () => {
   seen.length = 0;
-  await cli(["posts", "write", "--topic", "Studio opens Saturday", "--platform", "linkedin", "--hashtag", "coffee", "--cta", "Visit us", "--no-pictures", "--confirmed"]);
+  await cli([
+    "posts",
+    "write",
+    "--topic",
+    "Studio opens Saturday",
+    "--platform",
+    "linkedin",
+    "--hashtag",
+    "coffee",
+    "--cta",
+    "Visit us",
+    "--no-pictures",
+    "--confirmed",
+  ]);
   assert.deepEqual(seen[0].body, {
     topic: "Studio opens Saturday",
     platforms: ["linkedin"],
@@ -171,9 +207,12 @@ test("webhooks verify checks a delivery offline", async () => {
   await writeFile(file, body);
   const t = Math.floor(Date.now() / 1000);
   const secret = "whsec_cli";
-  const good = await cli(["webhooks", "verify", "--body-file", file, "--signature", `t=${t},v1=${sign(body, secret, t)}`], {
-    env: { SKRYVO_WEBHOOK_SECRET: secret, SKRYVO_CONFIG_DIR: join(configDir, "empty") },
-  });
+  const good = await cli(
+    ["webhooks", "verify", "--body-file", file, "--signature", `t=${t},v1=${sign(body, secret, t)}`],
+    {
+      env: { SKRYVO_WEBHOOK_SECRET: secret, SKRYVO_CONFIG_DIR: join(configDir, "empty") },
+    },
+  );
   assert.equal(good.code, 0, good.err);
   assert.equal(JSON.parse(good.out).type, "article.ready");
   const bad = await cli(["webhooks", "verify", "--body-file", file, "--signature", `t=${t},v1=00`, "--secret", secret]);
@@ -184,4 +223,32 @@ test("logout forgets the key", async () => {
   const { out } = await cli(["logout"]);
   assert.equal(JSON.parse(out).forgot, join(configDir, "api-key"));
   assert.equal((await cli(["account", "me"])).code, 1);
+});
+
+test("a long call can hand back a job and wait for it; a failed job exits 1 with its reason", async () => {
+  const withKey = { env: { SKRYVO_API_KEY: KEY } };
+  const started = await cli(
+    ["pictures", "design", "--text", "Hi", "--platform", "linkedin", "--callback-url", "https://example.com/done"],
+    withKey,
+  );
+  assert.equal(started.code, 0, started.err);
+  assert.equal(JSON.parse(started.out).job_id, "job_9");
+  const waited = await cli(
+    [
+      "pictures",
+      "design",
+      "--text",
+      "Hi",
+      "--platform",
+      "linkedin",
+      "--callback-url",
+      "https://example.com/done",
+      "--wait",
+    ],
+    withKey,
+  );
+  assert.equal(waited.code, 1);
+  assert.match(JSON.parse(waited.err.slice(waited.err.indexOf("{"))).error.message, /no kept look/);
+  assert.equal((await cli(["jobs", "wait", "job_9"], withKey)).code, 1);
+  assert.equal(JSON.parse((await cli(["jobs", "get", "job_9"], withKey)).out).status, "failed");
 });

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { Skryvo } from "../client.js";
 import type * as S from "../generated/schemas.js";
+import { SkryvoError } from "../errors.js";
 import { verifyWebhook } from "../webhooks.js";
 import { WEBHOOK_EVENTS } from "../generated/operations.js";
 
@@ -94,7 +95,32 @@ const brand: Option = { type: "string", help: "<id> The brand (default: the acco
 const tone: Option = { type: "string", help: "<words> Tone, e.g. friendly" };
 const language: Option = { type: "string", help: "<code> Writing language, e.g. en, de" };
 const audience: Option = { type: "string", help: "<words> Who it is for" };
-const at: Option = { type: "string", help: "<ISO 8601> When, with the person's offset; moves to the next quarter hour" };
+const at: Option = {
+  type: "string",
+  help: "<ISO 8601> When, with the person's offset; moves to the next quarter hour",
+};
+const later: Record<string, Option> = {
+  "callback-url": {
+    type: "string",
+    help: "<https url> Answer at once with a job; Skryvo posts the answer there, signed, when it is ready",
+  },
+  wait: { type: "boolean", help: "With --callback-url, also check the job until it ends and print the answer" },
+};
+
+/** The call's answer: as it came, or, with --wait, the finished job's answer; a failed job is an error. */
+async function finished(ctx: Context, started: unknown): Promise<unknown> {
+  const job = started as { job_id?: string };
+  if (!ctx.values.wait || !job.job_id) return started;
+  ctx.progress(`job ${job.job_id} running`);
+  const ended = await ctx.client().jobs.wait(job.job_id, {
+    onProgress: (j) => j.status === "running" && ctx.progress("still running"),
+  });
+  if (ended.status === "failed") {
+    throw new SkryvoError(`${ended.error?.detail ?? "The job failed."}`, { status: ended.error?.status });
+  }
+  return ended.answer;
+}
+
 const confirmed: Option = {
   type: "boolean",
   help: "The person approved the summary a first call returned (status: confirm)",
@@ -196,22 +222,27 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           pictures: { type: "boolean", help: "A picture in the brand's look with each post" },
           "no-pictures": { type: "boolean", help: "No pictures" },
           confirmed,
+          ...later,
         },
-        run: (ctx) =>
-          ctx.client().posts.write(
-            body<S.WritePostRequest>(ctx, {
-              topic: str(ctx.values, "topic"),
-              platforms: list(ctx.values, "platform"),
-              brand_id: str(ctx.values, "brand"),
-              tone: str(ctx.values, "tone"),
-              language: str(ctx.values, "language"),
-              audience: str(ctx.values, "audience"),
-              call_to_action: str(ctx.values, "cta"),
-              hashtags: list(ctx.values, "hashtag"),
-              link: str(ctx.values, "link"),
-              pictures: yesNo(ctx.values, "pictures", "no-pictures"),
-              confirmed: ctx.values.confirmed ? true : undefined,
-            }),
+        run: async (ctx) =>
+          finished(
+            ctx,
+            await ctx.client().posts.write(
+              body<S.WritePostRequest>(ctx, {
+                topic: str(ctx.values, "topic"),
+                platforms: list(ctx.values, "platform"),
+                brand_id: str(ctx.values, "brand"),
+                tone: str(ctx.values, "tone"),
+                language: str(ctx.values, "language"),
+                audience: str(ctx.values, "audience"),
+                call_to_action: str(ctx.values, "cta"),
+                hashtags: list(ctx.values, "hashtag"),
+                link: str(ctx.values, "link"),
+                pictures: yesNo(ctx.values, "pictures", "no-pictures"),
+                confirmed: ctx.values.confirmed ? true : undefined,
+                callback_url: str(ctx.values, "callback-url"),
+              }),
+            ),
           ),
       },
       schedule: {
@@ -303,16 +334,23 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           direction: { type: "string", help: "<words> closer, bolder, calmer, or the person's own words" },
           headline: { type: "string", help: "<words> Up to nine words on the picture" },
           photo: { type: "string", help: "<id> One of the brand's own photos (see `brands design`)" },
+          ...later,
         },
-        run: ({ client, values }) =>
-          client().pictures.design({
-            text: str(values, "text")!,
-            platforms: list(values, "platform")!,
-            brand_id: str(values, "brand"),
-            direction: str(values, "direction"),
-            headline: str(values, "headline"),
-            photo_id: str(values, "photo"),
-          }),
+        run: async (ctx) => {
+          const values = ctx.values;
+          return finished(
+            ctx,
+            await ctx.client().pictures.design({
+              text: str(values, "text")!,
+              platforms: list(values, "platform")!,
+              brand_id: str(values, "brand"),
+              direction: str(values, "direction"),
+              headline: str(values, "headline"),
+              photo_id: str(values, "photo"),
+              callback_url: str(values, "callback-url"),
+            }),
+          );
+        },
       },
     },
   },
@@ -336,24 +374,29 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           "only-you": { type: "string", help: "<words> Facts only the person knows" },
           notes: { type: "string", help: "<words>" },
           source: { type: "string", multiple: true, help: "<url> Up to 3 pages to read" },
+          ...later,
         },
-        run: (ctx) =>
-          ctx.client().articles.plan(
-            body<S.PlanArticleRequest>(ctx, {
-              topic: str(ctx.values, "topic"),
-              brand_id: str(ctx.values, "brand"),
-              length: num(ctx.values, "length"),
-              tone: str(ctx.values, "tone"),
-              style: str(ctx.values, "style"),
-              language: str(ctx.values, "language"),
-              audience: str(ctx.values, "audience"),
-              point_of_view: str(ctx.values, "pov"),
-              keywords: list(ctx.values, "keyword"),
-              must_cover: list(ctx.values, "must-cover"),
-              only_you: str(ctx.values, "only-you"),
-              notes: str(ctx.values, "notes"),
-              sources: list(ctx.values, "source"),
-            }),
+        run: async (ctx) =>
+          finished(
+            ctx,
+            await ctx.client().articles.plan(
+              body<S.PlanArticleRequest>(ctx, {
+                topic: str(ctx.values, "topic"),
+                brand_id: str(ctx.values, "brand"),
+                length: num(ctx.values, "length"),
+                tone: str(ctx.values, "tone"),
+                style: str(ctx.values, "style"),
+                language: str(ctx.values, "language"),
+                audience: str(ctx.values, "audience"),
+                point_of_view: str(ctx.values, "pov"),
+                keywords: list(ctx.values, "keyword"),
+                must_cover: list(ctx.values, "must-cover"),
+                only_you: str(ctx.values, "only-you"),
+                notes: str(ctx.values, "notes"),
+                sources: list(ctx.values, "source"),
+                callback_url: str(ctx.values, "callback-url"),
+              }),
+            ),
           ),
       },
       write: {
@@ -383,7 +426,9 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           const started = await client.articles.write(
             body<S.WriteArticleRequest>(ctx, {
               plan_id: arg(ctx, 0, "plan id"),
-              answers: questions.length ? questions.map((question, i) => ({ question, answer: answers[i] })) : undefined,
+              answers: questions.length
+                ? questions.map((question, i) => ({ question, answer: answers[i] }))
+                : undefined,
               headline: str(ctx.values, "headline"),
               notes: str(ctx.values, "notes"),
               pictures: yesNo(ctx.values, "pictures", "no-pictures"),
@@ -482,7 +527,10 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
         options: {
           about: { type: "string", required: true, help: "<words>" },
           brand,
-          type: { type: "string", help: "<welcome|promotional|newsletter|follow_up|re_engagement|transactional|announcement>" },
+          type: {
+            type: "string",
+            help: "<welcome|promotional|newsletter|follow_up|re_engagement|transactional|announcement>",
+          },
           tone,
           language,
           audience,
@@ -659,6 +707,21 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
       },
     },
   },
+  jobs: {
+    summary: "Long calls made with --callback-url",
+    commands: {
+      get: {
+        summary: "A job: running, done with the call's answer, or failed with why",
+        args: ["<job-id>"],
+        run: (ctx) => ctx.client().jobs.get(arg(ctx, 0, "job id")),
+      },
+      wait: {
+        summary: "Check a job until it ends and print the call's answer; a failed job exits 1",
+        args: ["<job-id>"],
+        run: (ctx) => finished({ ...ctx, values: { ...ctx.values, wait: true } }, { job_id: arg(ctx, 0, "job id") }),
+      },
+    },
+  },
   webhooks: {
     summary: "Endpoints Skryvo calls when posts publish or fail and articles are ready",
     commands: {
@@ -670,7 +733,10 @@ export const GROUPS: Record<string, { summary: string; commands: Record<string, 
           event: { type: "string", multiple: true, required: true, help: `<${WEBHOOK_EVENTS.join("|")}>` },
         },
         run: ({ client, values }) =>
-          client().webhooks.create({ url: str(values, "url")!, events: list(values, "event") as S.NewWebhookRequest["events"] }),
+          client().webhooks.create({
+            url: str(values, "url")!,
+            events: list(values, "event") as S.NewWebhookRequest["events"],
+          }),
       },
       delete: {
         summary: "Unsubscribe an endpoint",

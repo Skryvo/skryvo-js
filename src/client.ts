@@ -48,6 +48,7 @@ export class Skryvo {
   readonly videos: Videos;
   readonly results: Results;
   readonly webhooks: Webhooks;
+  readonly jobs: Jobs;
 
   readonly #apiKey: string;
   readonly #timeoutMs: number;
@@ -82,6 +83,7 @@ export class Skryvo {
     this.videos = new Videos(this);
     this.results = new Results(this);
     this.webhooks = new Webhooks(this);
+    this.jobs = new Jobs(this);
   }
 
   /** Any agent route, for one this version doesn't name yet: `request("GET", "/me")`. */
@@ -122,8 +124,7 @@ export class Skryvo {
       }
       const body = await response.json().catch(() => undefined);
       const error = errorFromResponse(response.status, body, response.headers);
-      const retryable =
-        response.status === 429 || (READS.has(method) && [502, 503, 504].includes(response.status));
+      const retryable = response.status === 429 || (READS.has(method) && [502, 503, 504].includes(response.status));
       if (!retryable || attempt >= this.#maxRetries) throw error;
       await sleep(Math.min((error.retryAfter ?? 2 ** attempt) * 1000, 60_000));
     }
@@ -155,6 +156,11 @@ abstract class Group {
 }
 
 const seg = (id: string) => encodeURIComponent(id);
+
+/** A long call's body with `callback_url`: it answers 202 with a job. */
+type Later<T> = T & { callback_url: string };
+/** A long call's body without `callback_url`: it waits for the answer. */
+type Now<T> = T & { callback_url?: null };
 
 export class Account extends Group {
   me() {
@@ -196,7 +202,13 @@ export class Channels extends Group {
 }
 
 export class Posts extends Group {
-  /** Drafts posts in the brand's voice and schedules nothing. A guessed setting returns `status: "confirm"`. */
+  /**
+   * Drafts posts in the brand's voice and schedules nothing. A guessed setting returns `status: "confirm"`.
+   * With `callback_url` it answers at once with a job; see `jobs.wait`.
+   */
+  write(body: Later<S.WritePostRequest>): Promise<S.JobAccepted>;
+  write(body: Now<S.WritePostRequest>): Promise<S.PostsToConfirm | S.PostsWritten>;
+  write(body: S.WritePostRequest): Promise<S.WritePostResponse>;
   write(body: S.WritePostRequest) {
     return this.send<S.WritePostResponse>("/drafts", body);
   }
@@ -220,6 +232,9 @@ export class Posts extends Group {
 
 export class Pictures extends Group {
   /** One picture in the brand's kept look, sized for each platform; spends image credits. */
+  design(body: Later<S.PictureRequest>): Promise<S.JobAccepted>;
+  design(body: Now<S.PictureRequest>): Promise<S.Pictures>;
+  design(body: S.PictureRequest): Promise<S.DesignPictureResponse>;
   design(body: S.PictureRequest) {
     return this.send<S.DesignPictureResponse>("/pictures", body);
   }
@@ -233,6 +248,9 @@ export interface WaitOptions {
 
 export class Articles extends Group {
   /** Free: headline, outline, search phrase and the questions only the person can answer. */
+  plan(body: Later<S.PlanArticleRequest>): Promise<S.JobAccepted>;
+  plan(body: Now<S.PlanArticleRequest>): Promise<S.ArticlePlan>;
+  plan(body: S.PlanArticleRequest): Promise<S.PlanArticleResponse>;
   plan(body: S.PlanArticleRequest) {
     return this.send<S.PlanArticleResponse>("/articles/plan", body);
   }
@@ -371,5 +389,36 @@ export class Webhooks extends Group {
   /** The last 30 days' deliveries, newest first, up to 50. */
   async deliveries(webhookId: string) {
     return (await this.read<S.Deliveries>(`/webhooks/${seg(webhookId)}/deliveries`)).deliveries;
+  }
+}
+
+export interface JobWaitOptions {
+  /** First wait between checks; it doubles up to `maxIntervalMs`. */
+  intervalMs?: number;
+  maxIntervalMs?: number;
+  timeoutMs?: number;
+  onProgress?: (job: S.Job) => void;
+}
+
+export class Jobs extends Group {
+  /** A long call's job: running, or done with the call's own answer, or failed with why. */
+  get(jobId: string) {
+    return this.read<S.Job>(`/jobs/${seg(jobId)}`);
+  }
+  /** Checks the job, 2 s apart and doubling to 30 s, until it is done or failed. */
+  async wait(jobId: string, options: JobWaitOptions = {}): Promise<S.Job> {
+    let interval = options.intervalMs ?? 2_000;
+    const most = options.maxIntervalMs ?? 30_000;
+    const deadline = Date.now() + (options.timeoutMs ?? 15 * 60_000);
+    for (;;) {
+      const job = await this.get(jobId);
+      options.onProgress?.(job);
+      if (job.status !== "running") return job;
+      if (Date.now() + interval > deadline) {
+        throw new SkryvoError(`The job ${jobId} is still running. Check it later with jobs.get.`);
+      }
+      await sleep(interval);
+      interval = Math.min(interval * 2, most);
+    }
   }
 }

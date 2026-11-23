@@ -175,7 +175,11 @@ export async function run(argv: string[], io: Io): Promise<number> {
         io.out("Usage: skryvo login\n\nReads the key from a hidden prompt, or from stdin: `skryvo login < key.txt`.");
         return 0;
       }
-      return await login([name, ...rest].filter((a) => a && a !== "-r" && a !== "--readable"), wantsText, io);
+      return await login(
+        [name, ...rest].filter((a) => a && a !== "-r" && a !== "--readable"),
+        wantsText,
+        io,
+      );
     }
     if (group === "logout") {
       const path = keyPath(io.env);
