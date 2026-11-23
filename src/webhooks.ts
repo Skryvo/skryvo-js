@@ -31,12 +31,12 @@ export function sign(payload: string | Uint8Array, secret: string, timestamp: nu
  * Checks a delivery's `Skryvo-Signature` header against the raw request body and returns the event.
  * Pass the body exactly as received, before any JSON parsing.
  */
-export function verifyWebhook<T = Record<string, unknown>>(
+export function verifyWebhook(
   payload: string | Uint8Array,
   signatureHeader: string | null | undefined,
   secret: string,
   options: VerifyOptions = {},
-): WebhookEvent<T> {
+): WebhookEvent {
   if (!signatureHeader) throw new WebhookVerificationError("The delivery has no Skryvo-Signature header.");
   if (!secret) throw new WebhookVerificationError("Pass the endpoint's secret (whsec_…).");
   const { t, v1 } = parts(signatureHeader);
@@ -56,7 +56,7 @@ export function verifyWebhook<T = Record<string, unknown>>(
   if (!matches) throw new WebhookVerificationError("The signature doesn't match this endpoint's secret.");
   const body = typeof payload === "string" ? payload : Buffer.from(payload).toString("utf8");
   try {
-    return JSON.parse(body) as WebhookEvent<T>;
+    return JSON.parse(body) as WebhookEvent;
   } catch (cause) {
     throw new WebhookVerificationError("The delivery's body is not JSON.", { cause });
   }

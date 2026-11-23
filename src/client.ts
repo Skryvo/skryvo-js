@@ -365,10 +365,11 @@ export class Webhooks extends Group {
     await this.client.request("DELETE", `/webhooks/${seg(webhookId)}`);
   }
   /** Sends a sample of each subscribed event, marked `"test": true`. */
-  test(webhookId: string) {
-    return this.send<Record<string, unknown>>(`/webhooks/${seg(webhookId)}/test`);
+  async test(webhookId: string) {
+    return (await this.send<{ deliveries: T.Delivery[] }>(`/webhooks/${seg(webhookId)}/test`)).deliveries;
   }
-  deliveries(webhookId: string) {
-    return this.read<Record<string, unknown>>(`/webhooks/${seg(webhookId)}/deliveries`);
+  /** The last 30 days' deliveries, newest first, up to 50. */
+  async deliveries(webhookId: string) {
+    return (await this.read<{ deliveries: T.Delivery[] }>(`/webhooks/${seg(webhookId)}/deliveries`)).deliveries;
   }
 }
