@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Published from GitHub Actions through npm trusted publishing, with signed provenance; no npm token is stored.
+
 ## 0.1.0
 
 - First release: a typed client for every route of the Skryvo agent API, generated from its OpenAPI

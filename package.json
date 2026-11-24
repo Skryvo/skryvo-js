@@ -1,6 +1,6 @@
 {
   "name": "skryvo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skryvo for Node.js and the command line: write, design and schedule posts and articles in a brand's voice.",
   "keywords": [
     "skryvo",
